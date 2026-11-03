@@ -1,3 +1,87 @@
+# at_home_tidybot (TidyBot++)
+
+TidyBot++ 원본 코드([jimmyyhwu/tidybot2](https://github.com/jimmyyhwu/tidybot2))에 우리 로봇 설정과 ROS 2 베이스 노드를 추가한 레포입니다.
+측위와 costmap은 [at_home_localization](https://github.com/DongGeonYoon/at_home_localization) 레포에 있습니다.
+
+원본 README는 [아래](#tidybot2)에 그대로 두었습니다. 원본은 conda(mamba)를 쓰지만, **이 레포는 Python 가상환경(venv)을 기준으로 설치합니다.**
+
+## at_home 변경 사항
+
+| 파일 | 내용 |
+|---|---|
+| `base_ros_node.py` (추가) | ROS 2 노드. `/cmd_vel`(Twist), `/tidybot/base/target_pose`(Pose2D)를 받고, `/tidybot/base/state`(Pose2D)와 `/odom`(바퀴 odometry)을 20 Hz로 냄 |
+| `base_server.py` | `execute_velocity()` 추가(`/cmd_vel`용), `get_state()`에 `base_velocity` 추가 |
+| `constants.py` | **이 로봇의** 엔코더 자석 오프셋(`ENCODER_MAGNET_OFFSETS`). 다른 로봇에서는 다시 측정해야 함 |
+| `gamepad_teleop.py` | 게임패드 최대 가속도 0.5 → 1.0 m/s² |
+| `requirements-env.txt` (추가) | 동작 확인한 환경의 pip 패키지 목록(버전 고정). `install_deps.sh`가 사용 |
+| `requirements-lock.txt` (추가) | ROS를 source한 상태에서 뽑은 전체 목록(참고용, ROS 패키지가 섞여 있어 pip로 설치 불가) |
+| `environment.yml`, `Dockerfile` (추가) | conda/Docker로 설치할 때 사용(선택) |
+| `install_deps.sh` (추가) | venv 기준 설치 스크립트 |
+
+## at_home 설치
+
+**가상환경(venv)을 만들고 그 안에 clone합니다.** 측위 레포의 venv(`~/at_home`)와는 **따로** 만드세요. numpy 버전이 다릅니다(측위 1.24.2, TidyBot 1.26.4).
+
+```text
+~/at_home_tidybot/              # 가상환경 (python3 -m venv)
+├── bin/activate
+├── lib/python3.10/site-packages/   # numpy 1.26.4, mujoco, phoenix6, pinocchio ...
+└── tidybot2/                   # 이 레포
+```
+
+**① 가상환경 만들기 (처음 한 번)**: Ubuntu 22.04 기준입니다. `base_ros_node.py`를 쓰려면 ROS 2 Humble도 필요합니다.
+```bash
+conda deactivate 2>/dev/null            # conda가 켜져 있으면 끄기 (base 포함)
+sudo apt install -y python3-venv git
+python3 -m venv --system-site-packages ~/at_home_tidybot
+```
+- **`--system-site-packages`는 꼭 넣으세요.** 빠지면 venv 안에서 ROS python 패키지(rclpy)를 찾지 못해 `base_ros_node.py`가 실행되지 않습니다.
+
+**② 가상환경 안에 clone하고 의존성 설치 (처음 한 번)**
+```bash
+source ~/at_home_tidybot/bin/activate   # 프롬프트 앞에 (at_home_tidybot)이 붙음
+cd ~/at_home_tidybot
+git clone https://github.com/DongGeonYoon/at_home_tidybot-.git tidybot2
+cd ~/at_home_tidybot/tidybot2
+./install_deps.sh
+```
+- apt(sudo)로 CAN 도구, joystick, USB, GL/X 런타임을 설치합니다. `Dockerfile`과 같은 목록입니다. 이미 있으면 `./install_deps.sh --skip-system`을 쓰세요.
+- `requirements-env.txt`의 패키지를 venv 안에 설치합니다. pip, setuptools, wheel은 제외합니다. setuptools 84가 시스템 colcon과 충돌하기 때문입니다.
+- venv의 `bin/activate`에 `PYTHONNOUSERSITE=1`을 추가해서 `~/.local` 패키지가 끼어들지 않게 합니다.
+- 베이스 하드웨어(CANivore, udev 규칙 등) 설정은 원본 [Software 문서](https://tidybot2.github.io/docs/software)를 따르세요.
+
+## at_home 실행
+
+**새 터미널마다**
+```bash
+source ~/at_home_tidybot/bin/activate
+cd ~/at_home_tidybot/tidybot2
+```
+
+**베이스 + ROS 2 (`/cmd_vel` 주행)**: 터미널 두 개
+```bash
+# 터미널 1: 베이스 RPC 서버 (실시간 제어 루프)
+python base_server.py
+
+# 터미널 2: ROS 2 노드
+source /opt/ros/humble/setup.bash
+export RMW_IMPLEMENTATION=rmw_zenoh_cpp
+export ROS_DOMAIN_ID=25
+python base_ros_node.py
+```
+- `base_ros_node.py`는 `localhost:50000`의 `base_server.py`에 연결합니다. **`base_server.py`를 먼저 켜세요.**
+- Zenoh router가 떠 있어야 다른 PC(MPPI)와 통신합니다. 측위 bringup(`run_zenoh:=true`)이 router를 띄웁니다.
+- `/cmd_vel`이 0.25초 끊기면 베이스가 스스로 멈춥니다.
+
+**게임패드 조종**
+```bash
+python gamepad_teleop.py                # Start 버튼으로 제어 시작
+```
+
+`data/`(시뮬레이션 데모 데이터)는 레포에 넣지 않았습니다. 필요하면 원본 README의 안내대로 받으세요.
+
+---
+
 # tidybot2
 
 This code release accompanies the following project:

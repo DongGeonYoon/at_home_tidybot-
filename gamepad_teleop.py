@@ -34,7 +34,7 @@ class GamepadTeleop:
 
             # Start control
             if not self.vehicle and self.joy.get_button(7):  # 7 is the "Start" button
-                self.vehicle = Vehicle(max_vel=(1.0, 1.0, 3.14), max_accel=(0.5, 0.5, 2.36))
+                self.vehicle = Vehicle(max_vel=(1.0, 1.0, 3.14), max_accel=(1.0, 1.0, 2.36))
                 self.vehicle.start_control()
                 last_enabled = False
                 frame = 'local'
